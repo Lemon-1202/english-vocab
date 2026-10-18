@@ -1,0 +1,16 @@
+# 构建时下载的原始语料（约 26MB，可重新下载）
+_build/tatoeba/
+_build/*.log
+_build/__pycache__/
+_build/_seed.json
+
+# 构建用的原始数据（fetch-inputs.ps1 可重新下载，共约 11MB）
+_build/*.csv
+_build/*.zip
+
+# 备份与临时文件
+*.bak
+*.bak-*
+*~
+.DS_Store
+Thumbs.db
