@@ -5,6 +5,21 @@
   const LS_KEY = 'vocab-trainer-v1';
   const BANKS = window.VOCAB_BANKS || { primary: { words: [] }, junior: { words: [] }, senior: { words: [] } };
   const EXAMPLES = window.VOCAB_EXAMPLES || {};
+  const GROUPS = window.VOCAB_GROUPS || { pos: {}, prefix: {}, suffix: {}, root: {} };
+  const GROUP_DIMS = [
+    ['pos', '词性', '名词 / 动词 / 形容词…按词性归堆'],
+    ['prefix', '前缀', 'un- / re- / dis- 这类造词零件'],
+    ['suffix', '后缀', '名词、形容词、动词的常见收尾'],
+    ['root', '词根', 'spect / port / dict…同根词放一起'],
+  ];
+  // 单词 → 所属词性组 / 词根组（学习卡上的小标签、单词表分组都用它）
+  const POS_OF = new Map();
+  const ROOT_OF = new Map();
+  for (const [dim, map] of [['pos', POS_OF], ['root', ROOT_OF]]) {
+    for (const level of Object.keys(GROUPS[dim] || {})) {
+      for (const g of GROUPS[dim][level]) for (const w of g.words) if (!map.has(w)) map.set(w, g);
+    }
+  }
   const LEVEL_NAMES = { primary: '小学', junior: '初中', senior: '高中' };
   const LEVEL_EMOJI = { primary: '🧸', junior: '📗', senior: '🎓' };
 
@@ -126,8 +141,10 @@
   let view = session ? 'study' : (state.profile ? 'home' : 'onboarding');
   let draft = { level: 'junior', dailyNew: 15 };
   let listFilter = 'learned';
+  let groupDim = 'root';
+  let groupOpen = '';
 
-  function startSession(mode) {
+  function startSession(mode, extra) {
     ensureDay();
     let queue = [];
     if (mode === 'today') {
@@ -145,9 +162,14 @@
       queue = known.slice(0, DICTATE_SIZE).map((x) => ({ w: x.w, isNew: false }));
     } else if (mode === 'mistake') {
       queue = mistakeWords().slice(0, DICTATE_SIZE).map((w) => ({ w, isNew: false }));
+    } else if (mode === 'group') {
+      queue = (extra || []).map((w) => ({ w, isNew: !state.words[w] }));
     }
     if (!queue.length) {
-      toast(mode === 'mistake' ? '错词本是空的 🎉' : mode === 'dictate' ? '先去背几个词再来听写' : '今天没有要背的了 🌿');
+      toast(mode === 'mistake' ? '错词本是空的 🎉'
+        : mode === 'dictate' ? '先去背几个词再来听写'
+        : mode === 'group' ? '这一组还没有可以练的词'
+        : '今天没有要背的了 🌿');
       return;
     }
     const trimmed = queue.slice(0, CHUNK);
@@ -197,7 +219,10 @@
     r.lvl = r.lvl || state.profile.level;
     state.words[w] = r;
 
-    if (isNew) state.day.newDone++; else state.day.reviewDone++;
+    if (isNew && session.mode === 'group') {
+      // 分组练习不占「每日新词」额度，随时想练哪组就练哪组
+    } else if (isNew) state.day.newDone++;
+    else state.day.reviewDone++;
     save();
 
     session.idx++;
@@ -257,8 +282,17 @@
     return Math.floor(d / 1440) + ' 天前';
   }
 
-  function exampleBlock(w) {
-    const ex = exampleFor(w);
+  function tagLine(w) {
+    const pos = POS_OF.get(w);
+    const root = ROOT_OF.get(w);
+    if (!pos && !root) return '';
+    return `<div class="tags">
+      ${pos ? `<span class="tag">${esc(pos.label)}</span>` : ''}
+      ${root ? `<span class="tag root">${esc(root.label)}${root.meaning ? ` · ${esc(root.meaning)}` : ''}</span>` : ''}
+    </div>`;
+  }
+
+  function exampleBlock(w) {    const ex = exampleFor(w);
     if (!ex) return '';
     return `<div class="example">
       <div class="ex-en">${esc(ex.en)}</div>
@@ -340,6 +374,10 @@
     </div>
 
     <div class="row" style="gap:10px;margin-top:10px">
+      <button class="btn grow" data-act="groups">🧩 按词根 / 词性分组</button>
+    </div>
+
+    <div class="row" style="gap:10px;margin-top:10px">
       <button class="btn grow" data-act="wordlist">单词表</button>
       <button class="btn grow" data-act="stats">统计</button>
       <button class="btn grow" data-act="settings">设置</button>
@@ -398,6 +436,7 @@
       <div class="card card-word">
         <div class="word">${esc(e.w)}</div>
         ${e.p ? `<div class="phonetic">/${esc(e.p)}/</div>` : '<div class="phonetic">&nbsp;</div>'}
+        ${tagLine(e.w)}
         <button class="speak" data-act="speak" title="发音">🔊</button>
         ${revealed
           ? `<div class="meaning">${esc(e.t)}</div>${exampleBlock(e.w)}`
@@ -582,6 +621,45 @@
     </div>`;
   }
 
+  function renderGroups() {
+    const level = state.profile.level;
+    const dim = GROUP_DIMS.find((d) => d[0] === groupDim) || GROUP_DIMS[0];
+    const groups = (GROUPS[dim[0]] || {})[level] || [];
+    const words = groups.reduce((n, g) => n + g.words.length, 0);
+    return `${topbar(`<button class="btn ghost" data-act="home">← 返回</button>`)}
+    <div class="row between">
+      <h2>${LEVEL_NAMES[level]} · 分组</h2>
+      <span class="small muted">${groups.length} 组 · ${words.toLocaleString()} 词次</span>
+    </div>
+    <div class="seg" style="margin-bottom:12px">
+      ${GROUP_DIMS.map(([k, name]) => `<button data-act="group-dim" data-dim="${k}" aria-pressed="${groupDim === k}">${name}</button>`).join('')}
+    </div>
+    <p class="small muted" style="margin:0 0 14px">${dim[2]}</p>
+    ${groups.length ? '' : '<div class="card"><p class="small muted" style="margin:0">这一级词表里没有可用的分组。</p></div>'}
+    <div class="group-list">
+      ${groups.map((g) => {
+        const open = groupOpen === `${dim[0]}:${g.k}`;
+        const learned = g.words.filter((w) => state.words[w]).length;
+        return `<div class="grp${open ? ' open' : ''}">
+          <button class="grp-head" data-act="toggle-group" data-dim="${dim[0]}" data-k="${esc(g.k)}">
+            <span class="grp-name">${esc(g.label)}</span>
+            ${g.meaning ? `<span class="grp-mean">${esc(g.meaning)}</span>` : ''}
+            <span class="badge">${g.words.length}</span>
+            ${learned ? `<span class="badge dim">已学 ${learned}</span>` : ''}
+            <span class="grp-caret">${open ? '▾' : '▸'}</span>
+          </button>
+          ${open ? `<div class="grp-body">
+            <div class="grp-words">
+              ${g.words.slice(0, 120).map((w) => `<span class="gw${state.words[w] ? ' done' : ''}">${esc(w)}</span>`).join('')}
+              ${g.words.length > 120 ? `<span class="gw more">…还有 ${g.words.length - 120} 个</span>` : ''}
+            </div>
+            <button class="btn primary wide" data-act="practice-group" data-dim="${dim[0]}" data-k="${esc(g.k)}">练这组（${Math.min(g.words.length, CHUNK)} 张）</button>
+          </div>` : ''}
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+
   function render() {
     const app = $('#app');
     let html = '';
@@ -593,6 +671,7 @@
     else if (view === 'stats') html = renderStats();
     else if (view === 'wordlist') html = renderWordlist();
     else if (view === 'mistakes') html = renderMistakes();
+    else if (view === 'groups') html = renderGroups();
     else html = state.profile ? renderHome() : renderOnboarding();
     app.innerHTML = html;
     window.scrollTo({ top: 0 });
@@ -631,6 +710,20 @@
     if (act === 'stats') { view = 'stats'; render(); return; }
     if (act === 'wordlist') { view = 'wordlist'; render(); return; }
     if (act === 'mistakes') { view = 'mistakes'; render(); return; }
+    if (act === 'groups') { view = 'groups'; groupOpen = ''; render(); return; }
+    if (act === 'group-dim') { groupDim = btn.dataset.dim; groupOpen = ''; render(); return; }
+    if (act === 'toggle-group') {
+      const key = `${btn.dataset.dim}:${btn.dataset.k}`;
+      groupOpen = groupOpen === key ? '' : key;
+      render(); return;
+    }
+    if (act === 'practice-group') {
+      const list = (GROUPS[btn.dataset.dim] || {})[state.profile.level] || [];
+      const g = list.find((x) => x.k === btn.dataset.k);
+      if (!g) { toast('没找到这一组'); return; }
+      startSession('group', g.words);
+      return;
+    }
     if (act === 'practice-mistakes') { startSession('mistake'); return; }
     if (act === 'drop-mistake') {
       const w = btn.dataset.w;

@@ -6,6 +6,7 @@ const vm = require('node:vm');
 const ROOT = path.resolve(__dirname, '..');
 const bankSrc = fs.readFileSync(path.join(ROOT, 'data', 'bank.js'), 'utf8');
 const examplesSrc = fs.readFileSync(path.join(ROOT, 'data', 'examples.js'), 'utf8');
+const groupsSrc = fs.readFileSync(path.join(ROOT, 'data', 'groups.js'), 'utf8');
 const appSrc = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
 
 function makeEnv() {
@@ -73,6 +74,7 @@ function makeEnv() {
   function bootstrap() {
     vm.runInContext(bankSrc, ctx);
     vm.runInContext(examplesSrc, ctx);
+    vm.runInContext(groupsSrc, ctx);
     // app.js 是 IIFE，每次执行都会重新读 localStorage → 相当于「再打开一次」
     vm.runInContext(appSrc, ctx);
   }
@@ -234,6 +236,54 @@ html = envD.click({ act: 'drop-mistake', w: 'apple' });
 const stD2 = JSON.parse(envD.localStorage.getItem('vocab-trainer-v1'));
 assert(!stD2.mistakes.apple, '可以手动移出错词本');
 
+// ---------- 分组：按词性 / 词根 ----------
+{
+  const envG = makeEnv();
+  envG.localStorage.setItem('vocab-trainer-v1', seed());
+  envG.bootstrap();
+
+  const G = envG.window.VOCAB_GROUPS;
+  assert(!!G, 'groups.js 已加载');
+  for (const dim of ['pos', 'prefix', 'suffix', 'root']) {
+    for (const lv of ['primary', 'junior', 'senior']) {
+      assert(Array.isArray(G[dim]?.[lv]) && G[dim][lv].length > 0, `${lv} 有 ${dim} 分组`);
+    }
+  }
+  const posTotal = ['primary', 'junior', 'senior'].reduce((n, lv) => n + G.pos[lv].reduce((m, g) => m + g.words.length, 0), 0);
+  assert(posTotal === 10703, `词性分组覆盖全部 10,703 词（实际 ${posTotal}）`);
+  const rootSenior = G.root.senior.find((g) => g.k === 'spect');
+  const rootJunior = G.root.junior.find((g) => g.k === 'spect');
+  assert(!!rootSenior && rootSenior.words.includes('inspect'), 'spect 词根组（高中）包含 inspect');
+  assert(!!rootJunior && rootJunior.words.includes('respect'), 'spect 词根组（初中）包含 respect');
+
+  let html = envG.click({ act: 'groups' });
+  assert(html.includes('分组') && html.includes('词根'), '首页能进分组页');
+
+  html = envG.click({ act: 'group-dim', dim: 'pos' });
+  assert(html.includes('名词 n.') && html.includes('动词 v.'), '词性标签页列出名词/动词');
+
+  html = envG.click({ act: 'group-dim', dim: 'root' });
+  assert(html.includes('grp-name'), '词根标签页列出分组');
+
+  const openKey = G.root.junior[0].k;
+  html = envG.click({ act: 'toggle-group', dim: 'root', k: openKey });
+  assert(html.includes('gw') && html.includes('练这组'), `展开「${openKey}」能看到词条和练习按钮`);
+
+  html = envG.click({ act: 'practice-group', dim: 'root', k: openKey });
+  assert(html.includes('card-word') && html.includes('显示释义'), '从分组直接开练这一组');
+  assert(html.includes('class="tags"'), '学习卡上带词性 / 词根标签');
+  envG.click({ act: 'quit' });
+
+  // 分组练习不占每日新词额度
+  const before = JSON.parse(envG.localStorage.getItem('vocab-trainer-v1')).day.newDone;
+  envG.click({ act: 'groups' });
+  html = envG.click({ act: 'practice-group', dim: 'root', k: openKey });
+  envG.click({ act: 'reveal' });
+  envG.click({ act: 'grade', q: 2 });
+  const after = JSON.parse(envG.localStorage.getItem('vocab-trainer-v1')).day.newDone;
+  assert(after === before, '分组练习不增加「今日新词」计数');
+}
+
 // ---------- 渲染脏值扫描（undefined / NaN） ----------
 const envS = makeEnv();
 const seedS = JSON.parse(seed());
@@ -245,7 +295,7 @@ seedS.words = {
 seedS.mistakes = { apple: { n: 3, streak: 1, last: Date.now() - 60000 } };
 envS.localStorage.setItem('vocab-trainer-v1', JSON.stringify(seedS));
 envS.bootstrap();
-const views = ['home', 'wordlist', 'stats', 'settings', 'mistakes'];
+const views = ['home', 'wordlist', 'stats', 'settings', 'mistakes', 'groups'];
 for (const v of views) {
   const out = v === 'home' ? envS.appEl.innerHTML : envS.click({ act: v });
   assert(!/undefined|NaN/.test(out), `${v} 视图没有 undefined / NaN`);

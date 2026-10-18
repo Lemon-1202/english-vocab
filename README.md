@@ -20,6 +20,7 @@
 | 例句 | 每个词配一句英文例句 + 中文翻译（10,380 词有例句，其中 6,564 词带中文对照） |
 | 听写模式 | 听发音 / 看中文，敲出英文拼写，一轮 20 词；拼错自动打回第 1 档 |
 | 错词本 | 答错（不认识 / 听写拼错）的词自动收录，可单独练习；连对 2 次自动移出 |
+| 分组浏览 | 按**词性**（名/动/形/副…）、**前缀**（un- / re- / dis-…）、**后缀**（-ion / -able / -ly…）、**词根**（spect / port / dict…）分组，一键练整组 |
 | 键盘操作 | 空格显示释义，`1` / `2` / `3` 分别评不认识 / 模糊 / 认识；听写时回车确认 |
 | 统计 | 已学、已掌握、连续天数、正确率、复习档位分布、最近背过的词 |
 | 词表浏览 | 当前词库的已学 / 未学列表 |
@@ -38,6 +39,17 @@
 - **错词本**：首页点「📕 错词本」。按错误次数排序，每个词带释义、例句和最近一次出错的时间；可以「练习这些词」（走普通学习卡）、「移除」单个词或清空。连续答对 2 次会自动移出。
 - 三个功能共用同一套复习排程，所以听写和错词练习同样会影响艾宾浩斯档位。
 
+## 按词根 / 词性分组怎么用
+
+首页点「🧩 按词根 / 词性分组」，切到当前词库的分组页，四个标签页：
+
+- **词性**：名词 n. / 动词 v. / 形容词 adj. / 副词 adv. / 介词 / 代词 / 连词 / 冠词 / 数词 / 缩写字…全部 10,703 词都有归属（词性取自 ECDICT 释义的首个标注）。
+- **前缀**：un- 不 / re- 再 / dis- 分开 / in- 向内 / con- 共同 / over- 过度…只保留「剥掉前缀后剩下的是个真词」的组合，所以不会有 `republican` 这种假阳性。
+- **后缀**：-ion / -ment / -ness / -able / -ly / -er…同样要求词干是真词（`action = act + ion`），-ed / -ing 这类屈折变化没有收进来。
+- **词根**：spect 看 / port 搬运 / dict 说 / tain 握…先剥一层前缀再比对词根，`inspect`、`respect`、`suspect` 会落进同一组。
+
+点开任一分组能看到该组的词（已学的标绿），下面的「练这组」直接开一轮学习卡。**分组练习不占每日新词额度**，随手练多少组都不影响今天的计划。
+
 ## 目录
 
 ```
@@ -47,10 +59,12 @@ english-vocab/
 ├── app.js              全部逻辑：计划 / 学习卡 / 听写 / 错词本 / 复习调度 / 存档
 ├── data/bank.js        词库（window.VOCAB_BANKS）
 ├── data/examples.js    例句（window.VOCAB_EXAMPLES）
+├── data/groups.js      分组（window.VOCAB_GROUPS：词性 / 前缀 / 后缀 / 词根)
 ├── README.md
 └── _build/             词库与例句的构建脚本、测试（不参与运行）
     ├── build-bank.mjs  重新生成 data/bank.js
     ├── build-examples.py  从 Tatoeba 语料生成 data/examples.js
+    ├── build-groups.mjs  生成 data/groups.js（词性 / 词缀 / 词根分组）
     ├── smoke-test.cjs  无浏览器冒烟测试（node _build/smoke-test.cjs）
     └── fetch-inputs.ps1 下载构建用的原始数据
 ```
@@ -68,6 +82,7 @@ english-vocab/
 cd _build
 powershell -ExecutionPolicy Bypass -File fetch-inputs.ps1   # 下载词库原始数据（约 180MB，只需一次）
 node build-bank.mjs                                          # 生成 ../data/bank.js
+node build-groups.mjs                                        # 生成 ../data/groups.js（分组数据）
 # 例句（需要 Python，语料约 26MB，解压后较大）
 python build-examples.py                                     # 生成 ../data/examples.js
 cd .. ; node _build/smoke-test.cjs                           # 自测

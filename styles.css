@@ -347,3 +347,40 @@ input[type="number"], input[type="text"] {
   .levels { grid-template-columns: repeat(3, 1fr); }
   .level { flex-direction: column; align-items: flex-start; gap: 8px; }
 }
+
+/* ---------- 词性 / 词根标签 ---------- */
+.tags { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
+.tag {
+  font-size: 11.5px; font-family: var(--mono); letter-spacing: .02em;
+  color: var(--accent); background: var(--accent-soft);
+  border-radius: 999px; padding: 3px 10px;
+}
+.tag.root { color: var(--warn); background: color-mix(in oklab, var(--warn) 14%, transparent); }
+
+/* ---------- 分组页 ---------- */
+.group-list { display: flex; flex-direction: column; gap: 8px; }
+.grp {
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: var(--shadow); overflow: hidden;
+}
+.grp.open { border-color: color-mix(in oklab, var(--accent) 45%, var(--line)); }
+.grp-head {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 12px 14px; background: transparent; border: 0; cursor: pointer;
+  font: inherit; color: inherit; text-align: left;
+}
+.grp-name { font-family: var(--mono); font-weight: 700; font-size: 15px; }
+.grp-mean { font-size: 12.5px; color: var(--muted); }
+.grp-caret { margin-left: auto; color: var(--muted); font-size: 12px; }
+.grp-head .badge { background: var(--accent-soft); color: var(--accent); }
+.grp-head .badge.dim { background: color-mix(in oklab, var(--muted) 16%, transparent); color: var(--muted); }
+.grp-body { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 12px; }
+.grp-words { display: flex; flex-wrap: wrap; gap: 6px; max-height: 44vh; overflow: auto; }
+.gw {
+  font-family: var(--mono); font-size: 12.5px; padding: 4px 9px;
+  border-radius: 8px; background: color-mix(in oklab, var(--ink) 5%, transparent);
+  color: var(--ink);
+}
+.gw.done { color: var(--good); background: color-mix(in oklab, var(--good) 12%, transparent); }
+.gw.more { color: var(--muted); background: transparent; }
+.tag, .grp-name, .gw { word-break: break-word; }
